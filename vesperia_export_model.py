@@ -463,18 +463,17 @@ def read_material_section (f, start_offset):
             more_ints = (num_tex) * 2
             data0.extend(struct.unpack("{}{}i".format(e, more_ints), f.read(more_ints * 4)))
         set_0.append({'num_tex': num_tex, 'internal_id': internal_id, 'data0': data0})
-    unk, = struct.unpack("{}I".format(e), f.read(4))
     set_1 = []
     for i in range(num_materials):
+        unk1, = struct.unpack("{}I".format(e), f.read(4))
         name = read_string(f, read_offset(f))
         end_offset = read_offset(f)
-        unk1, = struct.unpack("{}I".format(e), f.read(4))
+        unk2, = struct.unpack("{}I".format(e), f.read(4))
         tex_names = []
         for _ in range(set_0[i]['num_tex']):
             tex_name = read_string(f, read_offset(f))
             tex_val, = struct.unpack("{}I".format(e), f.read(4))
             tex_names.append([tex_name, tex_val])
-        unk2 = struct.unpack("{}I".format(e), f.read(4))
         set_1.append({'name': name, 'tex_names': tex_names, 'unk': [unk1, unk2]})
     material_struct = []
     if len(set_0) == len(set_1):
