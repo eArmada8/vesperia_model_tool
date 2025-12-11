@@ -411,7 +411,8 @@ def read_mesh_section (f, start_offset, uv_start_offset):
         name_end_offset = read_offset(f)
         dat = {'flags': flags, 'name': name, 'mesh': val1[0], 'submesh': val1[1], 'node': val1[2],
             'material_id': val1[3], 'uv_offset': uv_offset + uv_start_offset, 'idx_offset': idx_offset,
-            'vert_offset': vert_offset, 'num_verts': num_verts[i], 'uv_stride': val2[0], 'flags2': val2[1],
+            'vert_offset': vert_offset, 'mesh_midpoint': dat0[i][0:3], 'unk_float':  dat0[i][3],
+             'unk_fltarr': dat1[i],'num_verts': num_verts[i], 'uv_stride': val2[0], 'flags2': val2[1],
             'total_verts': val2[2], 'total_idx': val2[3], 'unk': val2[4]}
         mesh_blocks_info.append(dat)
     bone_palette_ids = struct.unpack("{}{}I".format(e, palette_count), f.read(4 * palette_count))
@@ -753,7 +754,7 @@ def write_gltf(base_name, skel_struct, vgmaps, mesh_blocks_info, meshes, materia
             with open(base_name+'.gltf', 'wb') as f:
                 f.write(json.dumps(gltf_data, indent=4).encode("utf-8"))
 
-def process_mdl (mdl_file, overwrite = False, write_raw_buffers = False, write_binary_gltf = True):
+def process_mdl (mdl_file, overwrite = False, write_raw_buffers = True, write_binary_gltf = True):
     print("Processing {}...".format(mdl_file))
     with open(mdl_file, 'rb') as f:
         magic = f.read(4)
@@ -766,7 +767,7 @@ def process_mdl (mdl_file, overwrite = False, write_raw_buffers = False, write_b
         set_endianness('<') # Figure out later how to determine this
         magic = f.read(4)
         if magic == b'FPS4':
-            header = struct.unpack(">3I2H2I".format(e), f.read(24)) # num_entires, unk, len_header, entry_stride, unk * 3
+            header = struct.unpack(">3I2H2I".format(e), f.read(24)) # num_entries, unk, len_header, entry_stride, unk * 3
             toc = []
             for i in range(header[0]): # entry_stride should be 0x10
                 toc.append(struct.unpack(">3I".format(e), f.read(12))) # offset, padded length, true length
@@ -803,6 +804,7 @@ def process_mdl (mdl_file, overwrite = False, write_raw_buffers = False, write_b
                     material_struct_i = read_material_section (f, toc_1[model_dir[model][4]]['offset'])
                     mesh_blocks_info_i = material_id_to_index(mesh_blocks_info_i, material_struct_i, len(material_struct))
                     for i in range(len(mesh_blocks_info_i)):
+                        mesh_blocks_info_i[i]['model'] = model
                         mesh_blocks_info_i[i]['vgmap'] = len(bone_palettes)
                     bone_palettes.append(bone_palette_ids_i)
                     meshes.extend(meshes_i)
@@ -863,13 +865,13 @@ if __name__ == "__main__":
         import argparse
         parser = argparse.ArgumentParser()
         parser.add_argument('-t', '--textformat', help="Write gltf instead of glb", action="store_false")
-        parser.add_argument('-d', '--dumprawbuffers', help="Write fmt/ib/vb/vgmap files in addition to glb", action="store_true")
+        parser.add_argument('-s', '--skiprawbuffers', help="Do not write fmt/ib/vb/vgmap files in addition to glb", action="store_false")
         parser.add_argument('-o', '--overwrite', help="Overwrite existing files", action="store_true")
         parser.add_argument('mdl_file', help="Name of model file to process.")
         args = parser.parse_args()
         if os.path.exists(args.mdl_file) and args.mdl_file[-4:].upper() == '.DAT':
             process_mdl(args.mdl_file, overwrite = args.overwrite, \
-                write_raw_buffers = args.dumprawbuffers, write_binary_gltf = args.textformat)
+                write_raw_buffers = args.skiprawbuffers, write_binary_gltf = args.textformat)
     else:
         mdl_files = [x for x in glob.glob('*.DAT', recursive=True) if not x == 'BASEBONES.DAT']
         for mdl_file in mdl_files:
