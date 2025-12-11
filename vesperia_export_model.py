@@ -109,7 +109,7 @@ def read_skel_section (f, start_offset):
         skel_struct[i]['children'] = [j for j in range(len(skel_struct)) if skel_struct[j]['parent'] == i]
     return(skel_struct)
 
-def find_primary_skeleton (missing_bone_palette_ids):
+def find_primary_skeleton (missing_bone_palette_ids, base_name = ''):
     current_endian = e
     set_endianness('<')
     if os.path.exists('BASEBONES.DAT'):
@@ -141,6 +141,10 @@ def find_primary_skeleton (missing_bone_palette_ids):
                         skel_files.append(toc[i]['name'])
             matches = [x for x in skel_files if all([y in palettes[x] for y in missing_bone_palette_ids])]
             match = ''
+            if not base_name == '' and len(matches) > 1:
+                prefix_matches = [x for x in matches if os.path.basename(x).split('_')[0] == base_name.split('_')[0]]
+                if len(prefix_matches) == 1:
+                    matches = prefix_matches
             if len(matches) > 1:
                 print("Multiple matches found, please choose one.")
                 for i in range(len(matches)):
@@ -176,6 +180,10 @@ def find_primary_skeleton (missing_bone_palette_ids):
                 palettes[skel_files[i]] = [x['id'] for x in skel]
         matches = [x for x in skel_files if all([y in palettes[x] for y in missing_bone_palette_ids])]
         match = ''
+        if not base_name == '' and len(matches) > 1:
+            prefix_matches = [x for x in matches if os.path.basename(x).split('_')[0] == base_name.split('_')[0]]
+            if len(prefix_matches) == 1:
+                matches = prefix_matches
         if len(matches) > 1:
             print("Multiple matches found, please choose one.")
             for i in range(len(matches)):
@@ -226,11 +234,11 @@ def combine_skeletons (primary_skel_struct, skel_struct):
         new_skel_struct[i]['children'] = [j for j in range(len(new_skel_struct)) if new_skel_struct[j]['parent'] == i]
     return(new_skel_struct)
 
-def find_and_add_external_skeleton (skel_struct, bone_palette_ids):
+def find_and_add_external_skeleton (skel_struct, bone_palette_ids, base_name = ''):
     #Sanity check, if the skeleton is already complete then skip the search
     if not all([y in [x['id'] for x in skel_struct] for y in bone_palette_ids]):
         missing_bone_palette_ids = [y for y in bone_palette_ids if not y in [x['id'] for x in skel_struct]]
-        primary_skeleton = find_primary_skeleton (missing_bone_palette_ids)
+        primary_skeleton = find_primary_skeleton (missing_bone_palette_ids, base_name)
         if len(primary_skeleton) > 0:
             return(combine_skeletons (primary_skeleton, skel_struct))
         else:
@@ -811,7 +819,7 @@ def process_mdl (mdl_file, overwrite = False, write_raw_buffers = True, write_bi
                     mesh_blocks_info.extend(mesh_blocks_info_i)
                     material_struct.extend(material_struct_i)
                 bone_palette_ids = list(set([x for y in bone_palettes for x in y]))
-                skel_struct = find_and_add_external_skeleton (skel_struct, bone_palette_ids)
+                skel_struct = find_and_add_external_skeleton (skel_struct, bone_palette_ids, base_name)
                 for i in range(len(bone_palettes)):
                     vgmap = {'bone_{}'.format(bone_palettes[i][j]):j for j in range(len(bone_palettes[i]))}
                     if all([y in [x['id'] for x in skel_struct] for y in bone_palettes[i]]):
