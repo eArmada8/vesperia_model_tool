@@ -57,7 +57,7 @@ All meshes in a submodel must use the same bone palette.  This bone palette is l
 
 **Changing textures**
 
-Planned feature.
+The .dds files that are in the same folder as the meshes will be packed in with the meshes.  For example, for model `EST_C000`, the textures that belong to `EST_C000_CHEST` will be in `/EST_C000/EST_C000_CHEST` and those will be packed in with the meshes to be used by those meshes.  The textures inside `/textures` is for the glTF files and are not used for modding.  Only BC7 textures with mipmaps have been confirmed to work thus far.
 
 **Changing the skeleton**
 

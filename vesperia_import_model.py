@@ -218,6 +218,39 @@ def create_section_67 (model_base_name, mesh_blocks_info, bone_palette_ids, mate
     uv_data_block.extend(struct.pack("{}16I".format(e), *[0]*16))
     return (sec_6_block, uv_data_block)
 
+#Textures
+def create_section_89 (model_base_name, tex_names):
+    current_endian = e
+    set_endianness('>') # This section is in big endian (and most of the data is actually wrong)
+    sec_9_block = bytearray()
+    sec8_header_sz = (0x18 + (0x1C * len(tex_names)))
+    sec_8_header_block = bytearray(struct.pack("{}6I".format(e), 0x20000, 0, 0x10, len(tex_names), 0, 0))
+    sec_8_name_block = bytearray()
+    for i in range(len(tex_names)):
+        with open(model_base_name + '/' + tex_names[i] + '.dds', 'rb') as f:
+            img_dat = f.read()
+        magic = img_dat[0:4].decode("ASCII")
+        if magic == 'DDS ':
+            header = {}
+            header['dwSize'], header['dwFlags'], header['dwHeight'], header['dwWidth'],\
+                    header['dwPitchOrLinearSize'], header['dwDepth'], header['dwMipMapCount']\
+                    = struct.unpack("<7I", img_dat[4:32])
+            sec_8_header_block.extend(struct.pack("{}4I".format(e), header['dwWidth'], header['dwHeight'],
+                header['dwMipMapCount'], 0x8804aae4)) # The last hex value is wrong, even in native files
+            write_offset(sec8_header_sz, sec_8_header_block, sec_8_name_block)
+            sec_8_name_block.extend(tex_names[i].encode('utf-8') + b'\x00')
+            sec_8_header_block.extend(struct.pack("{}2I".format(e), len(sec_9_block), 0))
+            sec_9_block.extend(struct.pack("{}I".format(e), len(img_dat)))
+            sec_9_block.extend(img_dat)
+    sec_8_block = bytearray(sec_8_header_block + sec_8_name_block)
+    while len(sec_8_block) % 0x10:
+        sec_8_block.extend(b'\x00')
+    sec_8_block[4:8] = struct.pack("{}I".format(e), len(sec_8_block))
+    while len(sec_9_block) % 0x10:
+        sec_9_block.extend(b'\x00')
+    set_endianness(current_endian) # Restore original endianness
+    return (sec_8_block, sec_9_block)
+
 def rebuild_mdl (mdl_file):
     new_model_fps4 = bytearray()
     with open(mdl_file, 'rb') as f:
@@ -264,6 +297,7 @@ def rebuild_mdl (mdl_file):
                     base_model_data_blocks = read_fps4_with_names('{0}/zz_base_model.bin'.format(model_base_name))
                     mesh_blocks_info = read_struct_from_json(model_base_name + "/mesh_info.json")
                     material_struct = read_struct_from_json(model_base_name + "/material_info.json")
+                    # Build new mesh section
                     if all([mesh_blocks_info[i]["flags"] & 0xF00 in [0x100] for i in range(len(mesh_blocks_info))]):
                         bonemap = read_struct_from_json(model_base_name + "/bonemap.json")
                         model_skel_struct = primary_skel_struct + read_struct_from_json(model_base_name + '/model_skeleton_info.json')
@@ -275,6 +309,11 @@ def rebuild_mdl (mdl_file):
                         base_model_data_blocks[7]['data'] = sec7
                     else:
                         print("Skipping mesh rebuild for sub-model {}... (unsupported mesh types)".format(model))
+                    # Build new texture section
+                    tex_names = [os.path.basename(x)[:-4] for x in glob.glob(model_base_name + '/*.dds')]
+                    sec8, sec9 = create_section_89 (model_base_name, tex_names)
+                    base_model_data_blocks[8]['data'] = sec8
+                    base_model_data_blocks[9]['data'] = sec9
                     fps4_struct.extend(base_model_data_blocks)
                 new_model_inner_fps4 = write_fps4_with_names (fps4_struct)
                 new_model_fps4 = write_fps4_shell_type ([new_model_inner_fps4]
