@@ -917,7 +917,7 @@ def process_mdl (mdl_file, overwrite = False, write_raw_buffers = True, write_bi
                             write_struct_to_json(bonemap, model_base_name + '/bonemap')
                             for i in range(len(tex_data_ii[model])):
                                 f.seek(tex_data_ii[model][i]['offset'])
-                                size, = struct.unpack("{}I".format(e), f.read(4))
+                                size, = struct.unpack(">I".format(e), f.read(4)) # Big Endian
                                 open('{}/{}.dds'.format(model_base_name, tex_data_ii[model][i]['name']), 'wb').write(f.read(size))
                             fps4_struct = []
                             for i in range(len(model_dir[model])):
@@ -929,7 +929,7 @@ def process_mdl (mdl_file, overwrite = False, write_raw_buffers = True, write_bi
                     os.mkdir('textures')
                 for i in range(len(tex_data)): # A little repetitive, but these are for the glTF
                     f.seek(tex_data[i]['offset'])
-                    size, = struct.unpack("{}I".format(e), f.read(4))
+                    size, = struct.unpack(">I".format(e), f.read(4)) # Big Endian
                     print("Exporting {}.dds...".format(tex_data[i]['name']))
                     open('textures/{}.dds'.format(tex_data[i]['name']), 'wb').write(f.read(size))
             write_gltf(base_name, skel_struct, vgmaps, mesh_blocks_info, meshes, material_struct,\
