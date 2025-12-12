@@ -295,6 +295,8 @@ def rebuild_mdl (mdl_file):
                 for model in model_dir:
                     model_base_name = base_name + '/' + os.path.basename(model)
                     base_model_data_blocks = read_fps4_with_names('{0}/zz_base_model.bin'.format(model_base_name))
+                    for i in range(len(base_model_data_blocks)):
+                        base_model_data_blocks[i]['name'] = model
                     mesh_blocks_info = read_struct_from_json(model_base_name + "/mesh_info.json")
                     material_struct = read_struct_from_json(model_base_name + "/material_info.json")
                     # Build new mesh section
