@@ -2,13 +2,13 @@
 A script to get the mesh data out of the files from Tales of Vesperia: Definitive Edition (PC).  The output is in .glb files, although there is an option for .fmt/.ib/.vb/.vgmap that are compatible with DarkStarSword Blender import plugin for 3DMigoto.  The goal is eventually turn this into a modding tool, although there is no specific timeline for that feature.
 
 ## Credits:
-I am as always very thankful for the dedicated reverse engineers at the Tales of ABCDE discord and the Kiseki modding discord, for their brilliant work, and for sharing that work so freely.  Thank you to NeXoGone and the original author of the Tales of Graces f noesis scripts for structural information as well!
+I am as always very thankful for the dedicated reverse engineers at the Tales of ABCDE discord and the Kiseki modding discord, for their brilliant work, and for sharing that work so freely.  Thank you to NeXoGone and the original author of the Tales of Graces f noesis scripts for structural information as well!  This toolset also utilizes the tstrip module (python file format interface) adapted for [Sega_NN_tools](https://github.com/Argx2121/Sega_NN_tools/) by Argx2121, and I am grateful for its use - it is unmodified and is distributed under its original license.
 
 ## Requirements:
 1. Python 3.10 and newer is required for use of these scripts.  It is free from the Microsoft Store, for Windows users.  For Linux users, please consult your distro.
-2. The numpy module for python is needed.  Install by typing "python3 -m pip install numpy" in the command line / shell.  (The struct, json, io, glob, copy, subprocess, os, sys, and argparse modules are also required, but these are all already included in most basic python installations.)
+2. The numpy module for python is needed.  Install by typing "python3 -m pip install numpy" in the command line / shell.  (The struct, json, io, glob, copy, subprocess, shutil, zlib, os, sys, and argparse modules are also required, but these are all already included in most basic python installations.)
 3. The output can be imported into Blender as .glb, or as raw buffers using DarkStarSword's amazing plugin: https://github.com/DarkStarSword/3d-fixes/blob/master/blender_3dmigoto.py (tested on commit [5fd206c](https://raw.githubusercontent.com/DarkStarSword/3d-fixes/5fd206c52fb8c510727d1d3e4caeb95dac807fb2/blender_3dmigoto.py))
-4. vesperia_export_model.py is dependent on lib_fmtibvb.py, which must be in the same folder.
+4. vesperia_export_model.py is dependent on lib_fmtibvb.py, which must be in the same folder.  vesperia_import_model.py is dependent on vesperia_export_model.py, lib_fmtibvb.py and the pyffi_tstrip module, all of which must be in the same folder.
 5. [HyoutaTools](https://github.com/AdmiralCurtiss/HyoutaTools) can be used to unpack the .svo archives that come with the game.
 
 ## Usage:
@@ -31,3 +31,34 @@ Shows help message.
 
 `-o, --overwrite`
 Overwrite existing files without prompting.
+
+### vesperia_import_model.py
+Double click the python script and it will search the current folder for all .DAT files with exported folders, and import the meshes in the folder back into the .DAT files.  Additionally, it will parse the 2 JSON files (mesh metadata, materials) if available and use that information to rebuild the mesh sections  This script requires a working .DAT file already be present as it does not reconstruct the entire file to include key metadata.
+
+The remaining parts of the file (including the skeleton, materials, textures, etc) are copied unaltered from the .fps4 files inside the modding folders.
+
+It will make a backup of the originals, then overwrite the originals.  It will not overwrite backups; for example if "model.DAT.bak" already exists, then it will write the backup to "model.DAT.bak1", then to "model.DAT.bak2", and so on.
+
+*NOTE:* Newer versions of the Blender plugin export .vb0 files instead of .vb files.  Do not attempt to rename .vb0 files to .vb files, just leave them as-is and the scripts will look for the correct file.
+
+**Command line arguments:**
+`vesperia_import_model.py [-h] mdl_filename`
+
+`-h, --help`
+Shows help message.
+
+**Adding and deleting meshes**
+
+If meshes are missing (.fmt/.ib/.vb files that have been deleted), then the script will automatically insert an empty (invisible) mesh in its place.  Metadata does not need to be altered.
+
+The script only looks for mesh files that are listed in the `mesh_info.json`.  Currently, adding new meshes is unsupported (or at least untested).
+
+All meshes in a submodel must use the same bone palette.  This bone palette is listed in bonemap.json.
+
+**Changing textures**
+
+Planned feature.
+
+**Changing the skeleton**
+
+It is not possible to change the skeleton as the skeleton is external.
