@@ -911,7 +911,7 @@ def process_mdl (mdl_file, overwrite = False, write_raw_buffers = True, write_bi
                                 open('{0}/{1}.vgmap'.format(model_base_name, filename), 'wb').write(
                                     json.dumps(vgmaps_ii[model],indent=4).encode())
                             mesh_struct_i = [{y:x[y] for y in x if not any(
-                                ['offset' in y, 'num' in y])} for x in mesh_blocks_info_ii[model]]
+                                ['offset' in y, 'num' in y, 'material_id' in y])} for x in mesh_blocks_info_ii[model]]
                             for i in range(len(mesh_struct_i)):
                                 mesh_struct_i[i]['material'] = material_struct[mesh_struct_i[i]['material']]['name']
                             mesh_struct_i = [{'id_referenceonly': i, **mesh_struct_i[i]} for i in range(len(mesh_struct_i))]
