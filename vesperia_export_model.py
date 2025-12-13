@@ -470,31 +470,36 @@ def read_material_section (f, start_offset):
     set_0 = []
     for _ in range(num_materials):
         num_tex, internal_id = struct.unpack("{}2i".format(e), f.read(8))
-        data0 = list(struct.unpack("{}if4i".format(e), f.read(24)))
-        if num_tex > 0:
-            more_ints = (num_tex) * 2
-            data0.extend(struct.unpack("{}{}i".format(e, more_ints), f.read(more_ints * 4)))
-        set_0.append({'num_tex': num_tex, 'internal_id': internal_id, 'data0': data0})
+        s0_struct = {'base': struct.unpack("{}if4i".format(e), f.read(24)), 'tex': []}
+        for _ in range(num_tex):
+            s0_struct['tex'].append(struct.unpack("{}2i".format(e), f.read(8)))
+        set_0.append({'num_tex': num_tex, 'internal_id': internal_id, 's0_struct': s0_struct})
     set_1 = []
     for i in range(num_materials):
         unk1, = struct.unpack("{}I".format(e), f.read(4))
         name = read_string(f, read_offset(f))
         end_offset = read_offset(f)
         unk2, = struct.unpack("{}I".format(e), f.read(4))
-        tex_names = []
+        tex_names, tex_vals = [], []
         for _ in range(set_0[i]['num_tex']):
             tex_name = read_string(f, read_offset(f))
             tex_val, = struct.unpack("{}I".format(e), f.read(4))
-            tex_names.append([tex_name, tex_val])
-        set_1.append({'name': name, 'tex_names': tex_names, 'unk': [unk1, unk2]})
+            tex_names.append(tex_name)
+            tex_vals.append(tex_val)
+        set_1.append({'name': name, 'tex_names': tex_names, 's1_struct': {'base': [unk1, unk2], 'tex': tex_vals}})
+    set_2 = []
+    for i in range(num_materials):
+        s2_struct = {'base_floats': struct.unpack("{}4f".format(e), f.read(16)), 'tex_floats': []}
+        for _ in range(set_0[i]['num_tex']):
+            s2_struct['tex_floats'].append(struct.unpack("{}6f".format(e), f.read(24)))
+        set_2.append(s2_struct)
     material_struct = []
     if len(set_0) == len(set_1):
         for i in range(len(set_0)):
             material = {'name': set_1[i]['name']}
-            material['textures'] = [x[0] for x in set_1[i]['tex_names']]
-            material['alpha'] = 0 #need to work this out
+            material['textures'] = set_1[i]['tex_names']
             material['internal_id'] = set_0[i]['internal_id']
-            material['unk_parameters'] = {'set_0': set_0[i]['data0'], 'set_1': set_1[i]['unk']}
+            material['unk_parameters'] = {'set_0': set_0[i]['s0_struct'], 'set_1': set_1[i]['s1_struct'], 'set_2': set_2[i]}
             material_struct.append(material)
     return (material_struct)
 
@@ -604,7 +609,7 @@ def write_gltf(base_name, skel_struct, vgmaps, mesh_blocks_info, meshes, materia
     # Materials
     material_dict = [{'name': material_struct[i]['name'],
         'texture': material_struct[i]['textures'][0] if len(material_struct[i]['textures']) > 0 else '',
-        'alpha': material_struct[i]['alpha'] if 'alpha' in material_struct[i] else 0}
+        'alpha': 0}
         for i in range(len(material_struct))]
     texture_list = sorted(list(set([x['texture'] for x in material_dict if not x['texture'] == ''])))
     gltf_data['images'] = [{'uri':'textures/{}.dds'.format(x)} for x in texture_list]
