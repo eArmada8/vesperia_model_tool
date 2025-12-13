@@ -76,6 +76,41 @@ def read_fps4_shell_type (fps4_filename):
                 data_blocks.append(bytearray(f.read(toc[i][1])))
     return(data_blocks)
 
+#Materials
+def create_section_4 (material_struct):
+    num_mats = len(material_struct)
+    num_tex = sum([len(x['textures']) for x in material_struct])
+    header_sz = 20 + (num_mats * 64) + (num_tex * 40)
+    header_block = bytearray()
+    name_data_block = bytearray()
+    header_block.extend(struct.pack("{}5I".format(e), 0x30000, 0, 0x10, num_mats, num_tex))
+    for i in range(num_mats):
+        header_block.extend(struct.pack("{}2i".format(e), len(material_struct[i]['textures']),
+            material_struct[i]['internal_id']))
+        header_block.extend(struct.pack("{}if4i".format(e), *material_struct[i]['unk_parameters']['set_0']['base']))
+        for j in range(len(material_struct[i]['textures'])):
+            header_block.extend(struct.pack("{}2i".format(e), *material_struct[i]['unk_parameters']['set_0']['tex'][j]))
+    for i in range(num_mats):
+        header_block.extend(struct.pack("{}I".format(e), material_struct[i]['unk_parameters']['set_1']['base'][0]))
+        write_offset(header_sz, header_block, name_data_block)
+        name_data_block.extend(material_struct[i]['name'].encode('utf-8') + b'\x00')
+        write_offset(header_sz, header_block, name_data_block)
+        name_data_block.extend(b'\x00')
+        header_block.extend(struct.pack("{}I".format(e), material_struct[i]['unk_parameters']['set_1']['base'][1]))
+        for j in range(len(material_struct[i]['textures'])):
+            write_offset(header_sz, header_block, name_data_block)
+            name_data_block.extend(material_struct[i]['textures'][j].encode('utf-8') + b'\x00')
+            header_block.extend(struct.pack("{}I".format(e), material_struct[i]['unk_parameters']['set_1']['tex'][j]))
+    for i in range(num_mats):
+        header_block.extend(struct.pack("{}4f".format(e), *material_struct[i]['unk_parameters']['set_2']['base_floats']))
+        for j in range(len(material_struct[i]['textures'])):
+            header_block.extend(struct.pack("{}6f".format(e), *material_struct[i]['unk_parameters']['set_2']['tex_floats'][j]))
+    sec_4_block = bytearray(header_block + name_data_block)
+    while len(sec_4_block) % 0x10:
+        sec_4_block.extend(b'\x00')
+    sec_4_block[4:8] = struct.pack("{}I".format(e), len(sec_4_block))
+    return (sec_4_block)
+
 #Meshes
 def create_section_67 (model_base_name, mesh_blocks_info, bone_palette_ids, material_struct):
     material_dict = {material_struct[i]['name']:material_struct[i]['internal_id'] for i in range(len(material_struct))}
@@ -220,7 +255,7 @@ def create_section_89 (model_base_name, tex_names):
     current_endian = e
     set_endianness('>') # This section is in big endian (and most of the data is actually wrong)
     sec_9_block = bytearray()
-    sec8_header_sz = (0x18 + (0x1C * len(tex_names)))
+    sec_8_header_sz = (0x18 + (0x1C * len(tex_names)))
     sec_8_header_block = bytearray(struct.pack("{}6I".format(e), 0x20000, 0, 0x10, len(tex_names), 0, 0))
     sec_8_name_block = bytearray()
     for i in range(len(tex_names)):
@@ -234,7 +269,7 @@ def create_section_89 (model_base_name, tex_names):
                     = struct.unpack("<7I", img_dat[4:32])
             sec_8_header_block.extend(struct.pack("{}4I".format(e), header['dwWidth'], header['dwHeight'],
                 header['dwMipMapCount'], 0x8804aae4)) # The last hex value is wrong, even in native files
-            write_offset(sec8_header_sz, sec_8_header_block, sec_8_name_block)
+            write_offset(sec_8_header_sz, sec_8_header_block, sec_8_name_block)
             sec_8_name_block.extend(tex_names[i].encode('utf-8') + b'\x00')
             sec_8_header_block.extend(struct.pack("{}2I".format(e), len(sec_9_block), 0))
             sec_9_block.extend(struct.pack("{}I".format(e), len(img_dat)))
@@ -294,9 +329,12 @@ def rebuild_mdl (mdl_file):
                     base_model_data_blocks = read_fps4_with_names('{0}/zz_base_model.bin'.format(model_base_name))
                     for i in range(len(base_model_data_blocks)):
                         base_model_data_blocks[i]['name'] = model
-                    mesh_blocks_info = read_struct_from_json(model_base_name + "/mesh_info.json")
+                    # Build new material section
                     material_struct = read_struct_from_json(model_base_name + "/material_info.json")
+                    sec4 = create_section_4 (material_struct)
+                    base_model_data_blocks[4]['data'] = sec4
                     # Build new mesh section
+                    mesh_blocks_info = read_struct_from_json(model_base_name + "/mesh_info.json")
                     if all([mesh_blocks_info[i]["flags"] & 0xF00 in [0x100] for i in range(len(mesh_blocks_info))]):
                         bonemap = read_struct_from_json(model_base_name + "/bonemap.json")
                         model_skel_struct = primary_skel_struct + read_struct_from_json(model_base_name + '/model_skeleton_info.json')
