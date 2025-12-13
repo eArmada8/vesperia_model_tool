@@ -85,6 +85,7 @@ def create_section_67 (model_base_name, mesh_blocks_info, bone_palette_ids, mate
     bbox_list = []
     #radii = []
     vert_blocks, idx_blocks, uv_blocks = [], [], []
+    inserted_meshes_info = []
     for i in range(len(mesh_blocks_info)):
         safe_filename = "".join([x if x not in "\\/:*?<>|" else "_" for x in mesh_blocks_info[i]["name"]])
         num_uvs = (mesh_blocks_info[i]["uv_stride"] - 4) // 8
@@ -100,13 +101,8 @@ def create_section_67 (model_base_name, mesh_blocks_info, bone_palette_ids, mate
             stride_semantic = 'vb0 stride' if 'vb0 stride' in fmt else 'stride'
             assert (int(fmt[stride_semantic]) == 44 + (8 * num_uvs))
         except (FileNotFoundError, AssertionError) as err:
-            print("Submesh {0} not found or corrupt, generating an empty submesh...".format(mesh_filename))
-            # Generate an empty submesh
-            fmt = make_fmt(num_uvs)
-            ib = [[0,0,0]]
-            vb = [{'Buffer':[[0.0, 0.0, 0.0]]}, {'Buffer':[[0.0, 0.0, 0.0]]}]
-            vb.extend([{'Buffer':[[0.0, 0.0]]} for _ in range(num_uvs)])
-            vb.extend([{'Buffer':[[1.0, 0.0, 0.0, 0.0]]}, {'Buffer':[[0, 0, 0, 0]]}])
+            print("Submesh {0} not found or corrupt, skipping...".format(mesh_filename))
+            continue
         print("Processing submesh {0}...".format(mesh_filename))
         try:
             material_list.append(material_dict[mesh_blocks_info[i]["material"]])
@@ -172,8 +168,9 @@ def create_section_67 (model_base_name, mesh_blocks_info, bone_palette_ids, mate
         uv_blocks.append(uv_block)
         total_verts.append(total_vert)
         total_idxs.append(total_idx)
+        inserted_meshes_info.append(mesh_blocks_info[i])
     # Generate mesh block header
-    num_meshes = len(mesh_blocks_info)
+    num_meshes = len(inserted_meshes_info)
     palette_count = len(bone_palette_ids)
     head_sz = round_up_align(0x24 + (0x6c * num_meshes) + (0x4 * palette_count), align = 16)
     vblock_sz = sum([len(x) for x in vert_blocks])
@@ -185,14 +182,14 @@ def create_section_67 (model_base_name, mesh_blocks_info, bone_palette_ids, mate
     uv_data_block = bytearray()
     name_data_block = bytearray()
     for i in range(num_meshes):
-        header_block.extend(struct.pack("{}3f".format(e), *mesh_blocks_info[i]['mesh_midpoint']))
-        header_block.extend(struct.pack("{}f".format(e), mesh_blocks_info[i]['unk_float']))
+        header_block.extend(struct.pack("{}3f".format(e), *inserted_meshes_info[i]['mesh_midpoint']))
+        header_block.extend(struct.pack("{}f".format(e), inserted_meshes_info[i]['unk_float']))
         header_block.extend(struct.pack("{}4I".format(e), *base_num_verts[i]))
     for i in range(num_meshes):
-        header_block.extend(struct.pack("{}4f".format(e), *mesh_blocks_info[i]['unk_fltarr']))
+        header_block.extend(struct.pack("{}4f".format(e), *inserted_meshes_info[i]['unk_fltarr']))
     for i in range(num_meshes):
-        header_block.extend(struct.pack("{}4I".format(e), mesh_blocks_info[i]['flags'],
-            mesh_blocks_info[i]['mesh'], mesh_blocks_info[i]['submesh'], mesh_blocks_info[i]['node']))
+        header_block.extend(struct.pack("{}4I".format(e), inserted_meshes_info[i]['flags'],
+            inserted_meshes_info[i]['mesh'], inserted_meshes_info[i]['submesh'], inserted_meshes_info[i]['node']))
         header_block.extend(struct.pack("{}I".format(e), material_list[i]))
         header_block.extend(struct.pack("{}I".format(e), len(uv_data_block)))
         uv_data_block.extend(uv_blocks[i])
@@ -200,10 +197,10 @@ def create_section_67 (model_base_name, mesh_blocks_info, bone_palette_ids, mate
         idx_data_block.extend(idx_blocks[i])
         write_offset(head_sz, header_block, vert_data_block)
         vert_data_block.extend(vert_blocks[i])
-        header_block.extend(struct.pack("{}5I".format(e), mesh_blocks_info[i]['uv_stride'],
-            mesh_blocks_info[i]['flags2'], total_verts[i], total_idxs[i], mesh_blocks_info[i]['unk']))
+        header_block.extend(struct.pack("{}5I".format(e), inserted_meshes_info[i]['uv_stride'],
+            inserted_meshes_info[i]['flags2'], total_verts[i], total_idxs[i], inserted_meshes_info[i]['unk']))
         write_offset(head_sz + vblock_sz + iblock_sz, header_block, name_data_block)
-        name_data_block.extend(mesh_blocks_info[i]['name'].encode('utf-8') + b'\x00')
+        name_data_block.extend(inserted_meshes_info[i]['name'].encode('utf-8') + b'\x00')
         write_offset(head_sz + vblock_sz + iblock_sz, header_block, name_data_block)
         name_data_block.extend(b'\x00')
     header_block.extend(struct.pack("{}{}I".format(e, palette_count), *bone_palette_ids))
