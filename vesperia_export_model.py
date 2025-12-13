@@ -41,6 +41,9 @@ def read_string (f, start_offset):
     f.seek(current_loc)
     return(null_term_string[:-1].decode())
 
+def round_up_align (val, align = 16):
+    return ((val // align) * align + align if val % align > 0 else val)
+
 def decompress_tlzc (f): # Mode 2 only currently
     header = struct.unpack("<5I", f.read(20))
     if header[0] >> 8 & 0xFF == 2:
@@ -238,13 +241,13 @@ def find_and_add_external_skeleton (skel_struct, bone_palette_ids, base_name = '
     #Sanity check, if the skeleton is already complete then skip the search
     if not all([y in [x['id'] for x in skel_struct] for y in bone_palette_ids]):
         missing_bone_palette_ids = [y for y in bone_palette_ids if not y in [x['id'] for x in skel_struct]]
-        primary_skeleton = find_primary_skeleton (missing_bone_palette_ids, base_name)
-        if len(primary_skeleton) > 0:
-            return(combine_skeletons (primary_skeleton, skel_struct))
+        primary_skel_struct = find_primary_skeleton (missing_bone_palette_ids, base_name)
+        if len(primary_skel_struct) > 0:
+            return(combine_skeletons (primary_skel_struct, skel_struct), primary_skel_struct)
         else:
-            return(skel_struct)
+            return(skel_struct, [])
     else:
-        return(skel_struct)
+        return(skel_struct, [])
 
 def make_fmt(num_uvs, has_weights = True):
     fmt = {'stride': '0', 'topology': 'trianglelist', 'format':\
@@ -402,9 +405,9 @@ def read_mesh_section (f, start_offset, uv_start_offset):
     header = struct.unpack("{}9I".format(e), f.read(36)) #unk0, size, unk1, num_meshes, palette_count, unknown * 4
     num_meshes = header[3]
     palette_count = header[4]
-    dat0, num_verts = [],[]
+    bounding_sphere, num_verts = [],[]
     for _ in range(num_meshes):
-        dat0.append(struct.unpack("{}4f".format(e), f.read(16)))
+        bounding_sphere.append(struct.unpack("{}4f".format(e), f.read(16)))
         num_verts.append(struct.unpack("{}4I".format(e), f.read(16)))
     dat1 = [struct.unpack("{}4f".format(e), f.read(16)) for _ in range(num_meshes)]
     mesh_blocks_info = []
@@ -419,8 +422,9 @@ def read_mesh_section (f, start_offset, uv_start_offset):
         name_end_offset = read_offset(f)
         dat = {'flags': flags, 'name': name, 'mesh': val1[0], 'submesh': val1[1], 'node': val1[2],
             'material_id': val1[3], 'uv_offset': uv_offset + uv_start_offset, 'idx_offset': idx_offset,
-            'vert_offset': vert_offset, 'mesh_midpoint': dat0[i][0:3], 'unk_float':  dat0[i][3],
-             'unk_fltarr': dat1[i],'num_verts': num_verts[i], 'uv_stride': val2[0], 'flags2': val2[1],
+            'vert_offset': vert_offset, 'bounding_sphere_center': bounding_sphere[i][0:3],
+            'bounding_sphere_radius': bounding_sphere[i][3], 'unk_fltarr': dat1[i],
+            'num_verts': num_verts[i], 'uv_stride': val2[0], 'flags2': val2[1],
             'total_verts': val2[2], 'total_idx': val2[3], 'unk': val2[4]}
         mesh_blocks_info.append(dat)
     bone_palette_ids = struct.unpack("{}{}I".format(e, palette_count), f.read(4 * palette_count))
@@ -467,31 +471,36 @@ def read_material_section (f, start_offset):
     set_0 = []
     for _ in range(num_materials):
         num_tex, internal_id = struct.unpack("{}2i".format(e), f.read(8))
-        data0 = list(struct.unpack("{}if4i".format(e), f.read(24)))
-        if num_tex > 0:
-            more_ints = (num_tex) * 2
-            data0.extend(struct.unpack("{}{}i".format(e, more_ints), f.read(more_ints * 4)))
-        set_0.append({'num_tex': num_tex, 'internal_id': internal_id, 'data0': data0})
+        s0_struct = {'base': struct.unpack("{}if4i".format(e), f.read(24)), 'tex': []}
+        for _ in range(num_tex):
+            s0_struct['tex'].append(struct.unpack("{}2i".format(e), f.read(8)))
+        set_0.append({'num_tex': num_tex, 'internal_id': internal_id, 's0_struct': s0_struct})
     set_1 = []
     for i in range(num_materials):
         unk1, = struct.unpack("{}I".format(e), f.read(4))
         name = read_string(f, read_offset(f))
         end_offset = read_offset(f)
         unk2, = struct.unpack("{}I".format(e), f.read(4))
-        tex_names = []
+        tex_names, tex_vals = [], []
         for _ in range(set_0[i]['num_tex']):
             tex_name = read_string(f, read_offset(f))
             tex_val, = struct.unpack("{}I".format(e), f.read(4))
-            tex_names.append([tex_name, tex_val])
-        set_1.append({'name': name, 'tex_names': tex_names, 'unk': [unk1, unk2]})
+            tex_names.append(tex_name)
+            tex_vals.append(tex_val)
+        set_1.append({'name': name, 'tex_names': tex_names, 's1_struct': {'base': [unk1, unk2], 'tex': tex_vals}})
+    set_2 = []
+    for i in range(num_materials):
+        s2_struct = {'base_floats': struct.unpack("{}4f".format(e), f.read(16)), 'tex_floats': []}
+        for _ in range(set_0[i]['num_tex']):
+            s2_struct['tex_floats'].append(struct.unpack("{}6f".format(e), f.read(24)))
+        set_2.append(s2_struct)
     material_struct = []
     if len(set_0) == len(set_1):
         for i in range(len(set_0)):
             material = {'name': set_1[i]['name']}
-            material['textures'] = [x[0] for x in set_1[i]['tex_names']]
-            material['alpha'] = 0 #need to work this out
+            material['textures'] = set_1[i]['tex_names']
             material['internal_id'] = set_0[i]['internal_id']
-            material['unk_parameters'] = {'set_0': set_0[i]['data0'], 'set_1': set_1[i]['unk']}
+            material['unk_parameters'] = {'set_0': set_0[i]['s0_struct'], 'set_1': set_1[i]['s1_struct'], 'set_2': set_2[i]}
             material_struct.append(material)
     return (material_struct)
 
@@ -601,7 +610,7 @@ def write_gltf(base_name, skel_struct, vgmaps, mesh_blocks_info, meshes, materia
     # Materials
     material_dict = [{'name': material_struct[i]['name'],
         'texture': material_struct[i]['textures'][0] if len(material_struct[i]['textures']) > 0 else '',
-        'alpha': material_struct[i]['alpha'] if 'alpha' in material_struct[i] else 0}
+        'alpha': 0}
         for i in range(len(material_struct))]
     texture_list = sorted(list(set([x['texture'] for x in material_dict if not x['texture'] == ''])))
     gltf_data['images'] = [{'uri':'textures/{}.dds'.format(x)} for x in texture_list]
@@ -762,6 +771,42 @@ def write_gltf(base_name, skel_struct, vgmaps, mesh_blocks_info, meshes, materia
             with open(base_name+'.gltf', 'wb') as f:
                 f.write(json.dumps(gltf_data, indent=4).encode("utf-8"))
 
+def write_fps4_with_names (fps4_struct):
+    header_sz = 0x1c + (0x10 * (len(fps4_struct) + 1))
+    name_block_sz = len(b'\x00'.join([x['name'].encode('utf-8') for x in fps4_struct]))
+    head_block_sz = round_up_align(header_sz + name_block_sz, 0x10)
+    header_block = bytearray(b'FPS4' + struct.pack(">3I2H2I".format(e), len(fps4_struct) + 1,
+        0x1c, head_block_sz, 0x10, 0x47, 0, 0))
+    name_block = bytearray()
+    data_block = bytearray()
+    model = ''
+    ii = 0
+    for i in range(len(fps4_struct)):
+        header_block.extend(struct.pack(">4i".format(e), head_block_sz + len(data_block),
+            len(fps4_struct[i]['data']), len(fps4_struct[i]['data']), header_sz + len(name_block)))
+        data_block.extend(fps4_struct[i]['data'])
+        name_block.extend(fps4_struct[i]['name'].encode('utf-8') + b'\x00')
+    header_block.extend(struct.pack(">4i".format(e), -1, 0, 0, 0)) # Padding
+    fps4 = bytearray(header_block+name_block)
+    while len(fps4) % 0x10 > 0:
+        fps4.extend(b'\x00')
+    fps4.extend(data_block)
+    return(fps4)
+
+def write_fps4_shell_type (fps4_blocks, shell_name = ''):
+    header_block = bytearray(b'FPS4' + struct.pack(">3I2H2I".format(e), len(fps4_blocks) + 1,
+        0x1c, 0x80, 0xC, 0x7, 0, (0x1c + (0xC * (len(fps4_blocks) + 1)))))
+    data_block = bytearray()
+    for i in range(len(fps4_blocks)):
+        header_block.extend(struct.pack(">3i".format(e), 0x80 + len(data_block),
+            len(fps4_blocks[i]), len(fps4_blocks[i])))
+        data_block.extend(fps4_blocks[i])
+    header_block.extend(struct.pack(">3i".format(e), -1, 0, 0)) # Padding
+    header_block.extend(shell_name.encode('utf-8') + b'\x00')
+    while len(header_block) < 0x80:
+        header_block.extend(b'\x00')
+    return (header_block + data_block)
+
 def process_mdl (mdl_file, overwrite = False, write_raw_buffers = True, write_binary_gltf = True):
     print("Processing {}...".format(mdl_file))
     with open(mdl_file, 'rb') as f:
@@ -799,17 +844,19 @@ def process_mdl (mdl_file, overwrite = False, write_raw_buffers = True, write_bi
                     else:
                         model_dir[toc_1[i]['name']] = [i]
                 if 'FPS4' in model_dir:
-                    del(model_dir['FPS4'])
+                    del(model_dir['FPS4']) # The final entry is padding
                 skel_struct, meshes, bone_palettes, vgmaps, mesh_blocks_info, material_struct, tex_data = [], [], [], [], [], [], []
+                skel_struct_ii, meshes_ii, bone_palette_ids_ii, vgmaps_ii, mesh_blocks_info_ii, material_struct_ii, tex_data_ii = {}, {}, {}, {}, {}, {}, {}
                 for model in model_dir:
                     new_skel_struct = read_skel_section(f, toc_1[model_dir[model][3]]['offset'])
                     # Prevent addition of repeated bones - although in my experiments probably not necessary
                     unique_skel = [x for x in new_skel_struct if not x['id'] in [y['id'] for y in skel_struct]]
                     skel_struct.extend(unique_skel) # At this point the children lists are garbage
-                for model in model_dir:
                     meshes_i, bone_palette_ids_i, mesh_blocks_info_i = read_mesh_section (f,
                         toc_1[model_dir[model][6]]['offset'], toc_1[model_dir[model][7]]['offset'])
                     material_struct_i = read_material_section (f, toc_1[model_dir[model][4]]['offset'])
+                    tex_data_i = read_texture_section(f, toc_1[model_dir[model][8]]['offset'],
+                        toc_1[model_dir[model][9]]['offset'])
                     mesh_blocks_info_i = material_id_to_index(mesh_blocks_info_i, material_struct_i, len(material_struct))
                     for i in range(len(mesh_blocks_info_i)):
                         mesh_blocks_info_i[i]['model'] = model
@@ -818,48 +865,81 @@ def process_mdl (mdl_file, overwrite = False, write_raw_buffers = True, write_bi
                     meshes.extend(meshes_i)
                     mesh_blocks_info.extend(mesh_blocks_info_i)
                     material_struct.extend(material_struct_i)
+                    tex_data.extend(tex_data_i)
+                    skel_struct_ii[model] = new_skel_struct
+                    bone_palette_ids_ii[model] = bone_palette_ids_i
+                    meshes_ii[model] = meshes_i
+                    mesh_blocks_info_ii[model] = mesh_blocks_info_i
+                    material_struct_ii[model] = material_struct_i
+                    tex_data_ii[model] = tex_data_i
                 bone_palette_ids = list(set([x for y in bone_palettes for x in y]))
-                skel_struct = find_and_add_external_skeleton (skel_struct, bone_palette_ids, base_name)
+                skel_struct, primary_skel_struct = find_and_add_external_skeleton (skel_struct, bone_palette_ids, base_name)
+                model_list = [model for model in model_dir]
                 for i in range(len(bone_palettes)):
                     vgmap = {'bone_{}'.format(bone_palettes[i][j]):j for j in range(len(bone_palettes[i]))}
                     if all([y in [x['id'] for x in skel_struct] for y in bone_palettes[i]]):
                         skel_index = {skel_struct[j]['id']:j for j in range(len(skel_struct))}
                         vgmap = {skel_struct[skel_index[bone_palettes[i][j]]]['name']:j for j in range(len(bone_palettes[i]))}
                     vgmaps.append(vgmap)
+                    vgmaps_ii[model_list[i]] = vgmap
+                if write_raw_buffers == True: # Write raw buffers in separate folders
+                    for model in model_dir:
+                        if not os.path.exists(base_name):
+                            os.mkdir(base_name)
+                        write_struct_to_json(primary_skel_struct, base_name + '/primary_skeleton_info')
+                        tail_fps4_blocks = []
+                        for i in range(1, len(toc) - 1):
+                            f.seek(toc[i][0])
+                            tail_fps4_blocks.append(bytearray(f.read(toc[i][1])))
+                        tail_fps4 = write_fps4_shell_type (tail_fps4_blocks, shell_name = base_name)
+                        open(base_name + '/model_tail_blocks.fps4', 'wb').write(tail_fps4)
+                        model_base_name = base_name + '/' + os.path.basename(model)
+                        vgmap = {'bone_{}'.format(bone_palette_ids_ii[model][j]):j for j in range(len(bone_palette_ids_ii[model]))}
+                        if all([y in [x['id'] for x in skel_struct] for y in bone_palette_ids_ii[model]]):
+                            skel_index = {skel_struct[j]['id']:j for j in range(len(skel_struct))}
+                            vgmap = {skel_struct[skel_index[bone_palette_ids_ii[model][j]]]['name']:j for j in range(len(bone_palette_ids_ii[model]))}
+                        if os.path.exists(model_base_name) and (os.path.isdir(model_base_name)) and (overwrite == False):
+                            if str(input("Existing raw buffer folders found! Overwrite? (y/N) ")).lower()[0:1] == 'y':
+                                overwrite = True
+                        if (overwrite == True) or not os.path.exists(model_base_name):
+                            if not os.path.exists(model_base_name):
+                                os.mkdir(model_base_name)
+                            for i in range(len(meshes_ii[model])):
+                                filename = '{0:02d}_{1}'.format(i, mesh_blocks_info_ii[model][i]['name'])
+                                write_fmt(meshes_ii[model][i]['fmt'], '{0}/{1}.fmt'.format(model_base_name, filename))
+                                write_ib(meshes_ii[model][i]['ib'], '{0}/{1}.ib'.format(model_base_name, filename), meshes_ii[model][i]['fmt'], '<')
+                                write_vb(meshes_ii[model][i]['vb'], '{0}/{1}.vb'.format(model_base_name, filename), meshes_ii[model][i]['fmt'], '<')
+                                open('{0}/{1}.vgmap'.format(model_base_name, filename), 'wb').write(
+                                    json.dumps(vgmaps_ii[model],indent=4).encode())
+                            mesh_struct_i = [{y:x[y] for y in x if not any(
+                                ['offset' in y, 'num' in y, 'material_id' in y])} for x in mesh_blocks_info_ii[model]]
+                            for i in range(len(mesh_struct_i)):
+                                mesh_struct_i[i]['material'] = material_struct[mesh_struct_i[i]['material']]['name']
+                            mesh_struct_i = [{'id_referenceonly': i, **mesh_struct_i[i]} for i in range(len(mesh_struct_i))]
+                            write_struct_to_json(skel_struct_ii[model], model_base_name + '/model_skeleton_info')
+                            write_struct_to_json(mesh_struct_i, model_base_name + '/mesh_info')
+                            write_struct_to_json(material_struct_ii[model], model_base_name + '/material_info')
+                            bonemap = [x for x in vgmaps_ii[model]]
+                            write_struct_to_json(bonemap, model_base_name + '/bonemap')
+                            for i in range(len(tex_data_ii[model])):
+                                f.seek(tex_data_ii[model][i]['offset'])
+                                size, = struct.unpack(">I".format(e), f.read(4)) # Big Endian
+                                open('{}/{}.dds'.format(model_base_name, tex_data_ii[model][i]['name']), 'wb').write(f.read(size))
+                            fps4_struct = []
+                            for i in range(len(model_dir[model])):
+                                f.seek(toc_1[model_dir[model][i]]['offset'])
+                                fps4_struct.append({'name':model, 'data': f.read(toc_1[model_dir[model][i]]['padded_size'])})
+                            model_fps4 = write_fps4_with_names (fps4_struct)
+                            open('{0}/zz_base_model.bin'.format(model_base_name), 'wb').write(model_fps4)
                 if not os.path.exists('textures'):
                     os.mkdir('textures')
-                for model in model_dir:
-                    tex_data.extend(read_texture_section(f, toc_1[model_dir[model][8]]['offset'],
-                        toc_1[model_dir[model][9]]['offset']))
-                for i in range(len(tex_data)):
+                for i in range(len(tex_data)): # A little repetitive, but these are for the glTF
                     f.seek(tex_data[i]['offset'])
-                    size, = struct.unpack("{}I".format(e), f.read(4))
+                    size, = struct.unpack(">I".format(e), f.read(4)) # Big Endian
                     print("Exporting {}.dds...".format(tex_data[i]['name']))
                     open('textures/{}.dds'.format(tex_data[i]['name']), 'wb').write(f.read(size))
             write_gltf(base_name, skel_struct, vgmaps, mesh_blocks_info, meshes, material_struct,\
                 overwrite = overwrite, write_binary_gltf = write_binary_gltf)
-            if write_raw_buffers == True:
-                if os.path.exists(base_name) and (os.path.isdir(base_name)) and (overwrite == False):
-                    if str(input(base_name + " folder exists! Overwrite? (y/N) ")).lower()[0:1] == 'y':
-                        overwrite = True
-                if (overwrite == True) or not os.path.exists(base_name):
-                    if not os.path.exists(base_name):
-                        os.mkdir(base_name)
-                    for i in range(len(meshes)):
-                        filename = '{0:02d}_{1}'.format(i, mesh_blocks_info[i]['name'])
-                        write_fmt(meshes[i]['fmt'], '{0}/{1}.fmt'.format(base_name, filename))
-                        write_ib(meshes[i]['ib'], '{0}/{1}.ib'.format(base_name, filename), meshes[i]['fmt'], '<')
-                        write_vb(meshes[i]['vb'], '{0}/{1}.vb'.format(base_name, filename), meshes[i]['fmt'], '<')
-                        open('{0}/{1}.vgmap'.format(base_name, filename), 'wb').write(
-                            json.dumps(vgmaps[mesh_blocks_info[i]['vgmap']],indent=4).encode())
-                    mesh_struct = [{y:x[y] for y in x if not any(
-                        ['offset' in y, 'num' in y])} for x in mesh_blocks_info]
-                    for i in range(len(mesh_struct)):
-                        mesh_struct[i]['material'] = material_struct[mesh_struct[i]['material']]['name']
-                    mesh_struct = [{'id_referenceonly': i, **mesh_struct[i]} for i in range(len(mesh_struct))]
-                    write_struct_to_json(mesh_struct, base_name + '/mesh_info')
-                    write_struct_to_json(material_struct, base_name + '/material_info')
-                    #write_struct_to_json(skel_struct, base_name + '/skeleton_info')
     return True
 
 if __name__ == "__main__":
