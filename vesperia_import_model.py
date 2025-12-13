@@ -117,8 +117,7 @@ def create_section_67 (model_base_name, mesh_blocks_info, bone_palette_ids, mate
     # Generate mesh blocks first (vertices, indices, uv coordinates)
     base_num_verts, total_verts, total_idxs = [], [], []
     material_list = []
-    bbox_list = []
-    #radii = []
+    mesh_midpoint_list, mesh_radii_list = [], []
     vert_blocks, idx_blocks, uv_blocks = [], [], []
     inserted_meshes_info = []
     for i in range(len(mesh_blocks_info)):
@@ -144,13 +143,15 @@ def create_section_67 (model_base_name, mesh_blocks_info, bone_palette_ids, mate
         except:
             print("Unable to read material for {}!  The material assignment is either missing or invalid.".format(safe_filename))
             input("Press Enter to quit.")
-            #raise
-            pass
+            raise
+            #pass
         x0,x1 = max([x[0] for x in vb[0]['Buffer']]), min([x[0] for x in vb[0]['Buffer']])
         y0,y1 = max([x[1] for x in vb[0]['Buffer']]), min([x[1] for x in vb[0]['Buffer']])
         z0,z1 = max([x[2] for x in vb[0]['Buffer']]), min([x[2] for x in vb[0]['Buffer']])
-        bbox_list.append(((x0+x1)/2, (y0+y1)/2, (z0+z1)/2))
-        #radii.append(math.sqrt((x0-x1)**2+(y0-y1)**2+(z0-z1)**2)/2) # Not used, just here in case I need it later
+        mesh_midpoint = ((x0+x1)/2, (y0+y1)/2, (z0+z1)/2)
+        bounding_sphere_radius = max([math.dist(x, mesh_midpoint) for x in vb[0]['Buffer']])
+        mesh_midpoint_list.append(mesh_midpoint)
+        mesh_radii_list.append(bounding_sphere_radius)
         # Standard weighted meshes
         vert_block = bytearray()
         idx_dat_block = bytearray()
@@ -217,8 +218,8 @@ def create_section_67 (model_base_name, mesh_blocks_info, bone_palette_ids, mate
     uv_data_block = bytearray()
     name_data_block = bytearray()
     for i in range(num_meshes):
-        header_block.extend(struct.pack("{}3f".format(e), *inserted_meshes_info[i]['mesh_midpoint']))
-        header_block.extend(struct.pack("{}f".format(e), inserted_meshes_info[i]['unk_float']))
+        header_block.extend(struct.pack("{}3f".format(e), *mesh_midpoint_list[i]))
+        header_block.extend(struct.pack("{}f".format(e), mesh_radii_list[i]))
         header_block.extend(struct.pack("{}4I".format(e), *base_num_verts[i]))
     for i in range(num_meshes):
         header_block.extend(struct.pack("{}4f".format(e), *inserted_meshes_info[i]['unk_fltarr']))

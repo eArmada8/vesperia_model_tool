@@ -405,9 +405,9 @@ def read_mesh_section (f, start_offset, uv_start_offset):
     header = struct.unpack("{}9I".format(e), f.read(36)) #unk0, size, unk1, num_meshes, palette_count, unknown * 4
     num_meshes = header[3]
     palette_count = header[4]
-    dat0, num_verts = [],[]
+    bounding_sphere, num_verts = [],[]
     for _ in range(num_meshes):
-        dat0.append(struct.unpack("{}4f".format(e), f.read(16)))
+        bounding_sphere.append(struct.unpack("{}4f".format(e), f.read(16)))
         num_verts.append(struct.unpack("{}4I".format(e), f.read(16)))
     dat1 = [struct.unpack("{}4f".format(e), f.read(16)) for _ in range(num_meshes)]
     mesh_blocks_info = []
@@ -422,8 +422,9 @@ def read_mesh_section (f, start_offset, uv_start_offset):
         name_end_offset = read_offset(f)
         dat = {'flags': flags, 'name': name, 'mesh': val1[0], 'submesh': val1[1], 'node': val1[2],
             'material_id': val1[3], 'uv_offset': uv_offset + uv_start_offset, 'idx_offset': idx_offset,
-            'vert_offset': vert_offset, 'mesh_midpoint': dat0[i][0:3], 'unk_float':  dat0[i][3],
-             'unk_fltarr': dat1[i],'num_verts': num_verts[i], 'uv_stride': val2[0], 'flags2': val2[1],
+            'vert_offset': vert_offset, 'bounding_sphere_center': bounding_sphere[i][0:3],
+            'bounding_sphere_radius': bounding_sphere[i][3], 'unk_fltarr': dat1[i],
+            'num_verts': num_verts[i], 'uv_stride': val2[0], 'flags2': val2[1],
             'total_verts': val2[2], 'total_idx': val2[3], 'unk': val2[4]}
         mesh_blocks_info.append(dat)
     bone_palette_ids = struct.unpack("{}{}I".format(e, palette_count), f.read(4 * palette_count))
