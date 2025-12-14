@@ -322,7 +322,9 @@ def rebuild_mdl (mdl_file):
                         model_dir[toc_1[i]['name']] = [i]
                 if 'FPS4' in model_dir:
                     del(model_dir['FPS4']) # The final entry is padding
-                primary_skel_struct = read_struct_from_json(base_name + '/primary_skeleton_info.json')
+                model_skel_struct = read_struct_from_json(base_name + '/primary_skeleton_info.json')\
+                    + [x for y in [read_struct_from_json(base_name + '/' + os.path.basename(model)
+                    + '/model_skeleton_info.json') for model in model_dir] for x in y]
                 tail_fps4_blocks = read_fps4_shell_type(base_name + '/model_tail_blocks.fps4')
                 fps4_struct = []
                 for model in model_dir:
@@ -338,7 +340,6 @@ def rebuild_mdl (mdl_file):
                     mesh_blocks_info = read_struct_from_json(model_base_name + "/mesh_info.json")
                     if all([mesh_blocks_info[i]["flags"] & 0xF00 in [0x100] for i in range(len(mesh_blocks_info))]):
                         bonemap = read_struct_from_json(model_base_name + "/bonemap.json")
-                        model_skel_struct = primary_skel_struct + read_struct_from_json(model_base_name + '/model_skeleton_info.json')
                         bone_dict = {x['name']:x['id'] for x in model_skel_struct}
                         bone_palette_ids = [bone_dict[bonemap[i]] if bonemap[i] in bone_dict
                             else int(bonemap[i].replace('bone_','')) for i in range(len(bonemap))]
