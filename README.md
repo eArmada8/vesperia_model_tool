@@ -8,7 +8,7 @@ NOTE: There are multiple mesh types, denoted by the lower four bits of the secon
 Please see the [wiki](https://github.com/eArmada8/vesperia_model_tool/wiki), and the detailed documentation below.
 
 ## Credits:
-I am as always very thankful for the dedicated reverse engineers at the Tales of ABCDE discord and the Kiseki modding discord, for their brilliant work, and for sharing that work so freely.  Thank you to NeXoGone and the original author of the Tales of Graces f noesis scripts for structural information as well!  This toolset also utilizes the tstrip module (python file format interface) adapted for [Sega_NN_tools](https://github.com/Argx2121/Sega_NN_tools/) by Argx2121, and I am grateful for its use - it is unmodified and is distributed under its original license.
+I am as always very thankful for the dedicated reverse engineers at the Tales of ABCDE discord and the Kiseki modding discord, for their brilliant work, and for sharing that work so freely.  Thank you to AdmiralCurtiss, for HyoutaTools and specifications for TLZC and FPS4.  Thank you to NeXoGone and the original author of the Tales of Graces f noesis scripts for structural information as well!  This toolset also utilizes the tstrip module (python file format interface) adapted for [Sega_NN_tools](https://github.com/Argx2121/Sega_NN_tools/) by Argx2121, and I am grateful for its use - it is unmodified and is distributed under its original license.
 
 ## Requirements:
 1. Python 3.10 and newer is required for use of these scripts.  It is free from the Microsoft Store, for Windows users.  For Linux users, please consult your distro.

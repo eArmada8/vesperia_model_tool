@@ -11,7 +11,7 @@
 # GitHub eArmada8/vesperia_model_tool
 
 try:
-    import struct, json, numpy, copy, zlib, io, glob, os, sys
+    import struct, json, numpy, copy, zlib, lzma, io, glob, os, sys
     from lib_fmtibvb import *
 except ModuleNotFoundError as e:
     print("Python module missing! {}".format(e.msg))
@@ -44,11 +44,25 @@ def read_string (f, start_offset):
 def round_up_align (val, align = 16):
     return ((val // align) * align + align if val % align > 0 else val)
 
-def decompress_tlzc (f): # Mode 2 only currently
+def decompress_tlzc (f): # Mode 2 and 4 only currently, credit and thank you to github.com/AdmiralCurtiss/HyoutaTools
     header = struct.unpack("<5I", f.read(20))
     if header[0] >> 8 & 0xFF == 2:
         cmp_data = f.read()
         return(zlib.decompress(cmp_data))
+    elif header[0] >> 8 & 0xFF == 4:
+        lzma_header = struct.unpack("<BI", f.read(5))
+        filters = [{"id": lzma.FILTER_LZMA1, "dict_size": lzma_header[1], "lc": lzma_header[0] % 9,
+            "lp": (lzma_header[0] // 9) % 5, "pb": (lzma_header[0] // 9) // 5, "mode": lzma.MODE_NORMAL}]
+        num_streams = (header[2] + 0xFFFF) >> 16
+        streams = list(struct.unpack("<{}H".format(num_streams), f.read(2 * num_streams)))
+        unc_data = bytearray()
+        for i in range(len(streams)):
+            if not streams[i] == 0:
+                lzma_dec = lzma.LZMADecompressor(format = lzma.FORMAT_RAW, filters=filters)
+                unc_data.extend(lzma_dec.decompress(f.read(streams[i]), max_length = min(header[2] - len(unc_data), 0x10000)))
+            else:
+                unc_data.extend(f.read(min(header[2] - len(unc_data), 0x10000)))
+        return(unc_data)
     else:
         return(b'')
 
