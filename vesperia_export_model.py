@@ -938,7 +938,9 @@ def process_mdl (mdl_file, overwrite = False, write_raw_buffers = True, write_bi
                             for i in range(len(tex_data_ii[model])):
                                 f.seek(tex_data_ii[model][i]['offset'])
                                 size, = struct.unpack(">I".format(e), f.read(4)) # Big Endian
-                                open('{}/{}.dds'.format(model_base_name, tex_data_ii[model][i]['name']), 'wb').write(f.read(size))
+                                tex_rawdata = f.read(size)
+                                tex_ext = 'dds' if tex_rawdata[0:4] == b'DDS ' else 'bntx' if tex_rawdata[0:4] == b'BNTX' else 'bin'
+                                open('{}/{}.{}'.format(model_base_name, tex_data_ii[model][i]['name'], tex_ext), 'wb').write(tex_rawdata)
                             fps4_struct = []
                             for i in range(len(model_dir[model])):
                                 f.seek(toc_1[model_dir[model][i]]['offset'])
@@ -947,11 +949,18 @@ def process_mdl (mdl_file, overwrite = False, write_raw_buffers = True, write_bi
                             open('{0}/zz_base_model.bin'.format(model_base_name), 'wb').write(model_fps4)
                 if not os.path.exists('textures'):
                     os.mkdir('textures')
+                has_non_dds_textures = False
                 for i in range(len(tex_data)): # A little repetitive, but these are for the glTF
                     f.seek(tex_data[i]['offset'])
                     size, = struct.unpack(">I".format(e), f.read(4)) # Big Endian
-                    print("Exporting {}.dds...".format(tex_data[i]['name']))
-                    open('textures/{}.dds'.format(tex_data[i]['name']), 'wb').write(f.read(size))
+                    tex_rawdata = f.read(size)
+                    tex_ext = 'dds' if tex_rawdata[0:4] == b'DDS ' else 'bntx' if tex_rawdata[0:4] == b'BNTX' else 'bin'
+                    if not tex_ext == 'dds':
+                        has_non_dds_textures = True
+                    print("Exporting {}.{}...".format(tex_data[i]['name'], tex_ext))
+                    open('textures/{}.{}'.format(tex_data[i]['name'], tex_ext), 'wb').write(tex_rawdata)
+                if has_non_dds_textures == True:
+                    print("Warning! Textures are not in DDS format; they will need to be converted to DDS for use with the glTF model.")
             write_gltf(base_name, skel_struct, vgmaps, mesh_blocks_info, meshes, material_struct,\
                 overwrite = overwrite, write_binary_gltf = write_binary_gltf)
     return True
