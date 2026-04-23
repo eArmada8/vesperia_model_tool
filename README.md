@@ -50,6 +50,8 @@ It will make a backup of the originals, then overwrite the originals.  It will n
 
 *NOTE:* Newer versions of the Blender plugin export .vb0 files instead of .vb files.  Do not attempt to rename .vb0 files to .vb files, just leave them as-is and the scripts will look for the correct file.
 
+*NOTE:* The texture formats for PC and Switch are different (.dds files for PC, and .bntx files for Switch), [Switch-Toolbox](https://github.com/KillzXGaming/Switch-Toolbox/releases) by KillzXGaming can be used to convert the textures.  Additionally, the zz_base_model.bin and model_tail_blocks.fps4 files for PC and Switch are different, and cannot be interchanged - when converting mods from one platform to another, replace those files with platform-specific files from the native assets.
+
 **Command line arguments:**
 `vesperia_import_model.py [-h] mdl_filename`
 
