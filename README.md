@@ -8,7 +8,7 @@ NOTE: There are multiple mesh types, denoted by the lower four bits of the secon
 Please see the [wiki](https://github.com/eArmada8/vesperia_model_tool/wiki), and the detailed documentation below.
 
 ## Credits:
-I am as always very thankful for the dedicated reverse engineers at the Tales of ABCDE discord and the Kiseki modding discord, for their brilliant work, and for sharing that work so freely.  Thank you to AdmiralCurtiss, for HyoutaTools and specifications for TLZC and FPS4.  Thank you to NeXoGone and the original author of the Tales of Graces f noesis scripts for structural information as well!  This toolset also utilizes the tstrip module (python file format interface) adapted for [Sega_NN_tools](https://github.com/Argx2121/Sega_NN_tools/) by Argx2121, and I am grateful for its use - it is unmodified and is distributed under its original license.
+I am as always very thankful for the dedicated reverse engineers at the Tales of ABCDE discord and the Kiseki modding discord, for their brilliant work, and for sharing that work so freely.  Thank you to AdmiralCurtiss, for HyoutaTools and specifications for TLZC and FPS4.  Thank you to NeXoGone and the original author of the Tales of Graces f noesis scripts for structural information as well!  This toolset also utilizes the tstrip module (python file format interface) adapted for [Sega_NN_tools](https://github.com/Argx2121/Sega_NN_tools/) by Argx2121, and I am grateful for its use - it is unmodified and is distributed under its original license.  Thank you to [AboodXD](https://github.com/aboood40091/BNTX-Extractor) for specifications for the BNTX format.
 
 ## Requirements:
 1. Python 3.10 and newer is required for use of these scripts.  It is free from the Microsoft Store, for Windows users.  For Linux users, please consult your distro.
@@ -49,6 +49,8 @@ The remaining parts of the file (including the skeleton, materials, textures, et
 It will make a backup of the originals, then overwrite the originals.  It will not overwrite backups; for example if "model.DAT.bak" already exists, then it will write the backup to "model.DAT.bak1", then to "model.DAT.bak2", and so on.
 
 *NOTE:* Newer versions of the Blender plugin export .vb0 files instead of .vb files.  Do not attempt to rename .vb0 files to .vb files, just leave them as-is and the scripts will look for the correct file.
+
+*NOTE:* The texture formats for PC and Switch are different (.dds files for PC, and .bntx files for Switch), [Switch-Toolbox](https://github.com/KillzXGaming/Switch-Toolbox/releases) by KillzXGaming can be used to convert the textures.  Additionally, the zz_base_model.bin and model_tail_blocks.fps4 files for PC and Switch are different, and cannot be interchanged - when converting mods from one platform to another, replace those files with platform-specific files from the native assets.
 
 **Command line arguments:**
 `vesperia_import_model.py [-h] mdl_filename`
@@ -105,7 +107,7 @@ Be sure to add a comma to the } for the section prior if you are using a text ed
 
 **Changing materials and textures**
 
-The .dds files that are in the same folder as the meshes will be packed in with the meshes.  For example, for model `EST_C000`, the textures that belong to `EST_C000_CHEST` will be in `/EST_C000/EST_C000_CHEST` and those will be packed in with the meshes to be used by those meshes.  The textures inside `/textures` is for the glTF files and are not used for modding.  Only BC7 textures with mipmaps have been confirmed to work thus far.
+The .dds files that are in the same folder as the meshes will be packed in with the meshes.  For example, for model `EST_C000`, the textures that belong to `EST_C000_CHEST` will be in `/EST_C000/EST_C000_CHEST` and those will be packed in with the meshes to be used by those meshes.  The textures inside `/textures` is for the glTF files and are not used for modding.  Only BC7 DDS textures with mipmaps have been confirmed to work thus far for PC.  Switch textures should be in BC3 BNTX container format (untested).
 
 The materials are in `material_info.json`.  You can add and remove materials; be sure that both `name` and `internal_id` is unique to each entry in the material.
 

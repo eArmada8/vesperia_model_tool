@@ -260,18 +260,29 @@ def create_section_89 (model_base_name, tex_names):
     sec_8_header_block = bytearray(struct.pack("{}6I".format(e), 0x20000, 0, 0x10, len(tex_names), 0, 0))
     sec_8_name_block = bytearray()
     for i in range(len(tex_names)):
-        with open(model_base_name + '/' + tex_names[i] + '.dds', 'rb') as f:
+        with open(model_base_name + '/' + tex_names[i], 'rb') as f:
             img_dat = f.read()
         magic = img_dat[0:4].decode("ASCII")
-        if magic == 'DDS ':
+        if magic in ['DDS ', 'BNTX']:
             header = {}
-            header['dwSize'], header['dwFlags'], header['dwHeight'], header['dwWidth'],\
-                    header['dwPitchOrLinearSize'], header['dwDepth'], header['dwMipMapCount']\
-                    = struct.unpack("<7I", img_dat[4:32])
+            if magic == 'DDS ':
+                header['dwSize'], header['dwFlags'], header['dwHeight'], header['dwWidth'],\
+                        header['dwPitchOrLinearSize'], header['dwDepth'], header['dwMipMapCount']\
+                        = struct.unpack("<7I", img_dat[4:32])
+            elif magic == 'BNTX':
+                nx_header = img_dat[0x20:0x44]
+                if nx_header[0:4] == b'NX  ':
+                    count, addr1, addr2, addr3, addr3_size = struct.unpack("<I3QI", nx_header[4:])
+                    addr1b, = struct.unpack("<Q", img_dat[addr1:addr1+8])
+                    brti_header = img_dat[addr1b:addr1b+0x78]
+                    if brti_header[0:4] == b'BRTI':
+                        header['dwMipMapCount'], = struct.unpack("<H", brti_header[0x16:0x18])
+                        header['dwWidth'], = struct.unpack("<I", brti_header[0x24:0x28])
+                        header['dwHeight'], = struct.unpack("<I", brti_header[0x28:0x2C])
             sec_8_header_block.extend(struct.pack("{}4I".format(e), header['dwWidth'], header['dwHeight'],
                 header['dwMipMapCount'], 0x8804aae4)) # The last hex value is wrong, even in native files
             write_offset(sec_8_header_sz, sec_8_header_block, sec_8_name_block)
-            sec_8_name_block.extend(tex_names[i].encode('utf-8') + b'\x00')
+            sec_8_name_block.extend(os.path.splitext(tex_names[i])[0].encode('utf-8') + b'\x00')
             sec_8_header_block.extend(struct.pack("{}2I".format(e), len(sec_9_block), 0))
             sec_9_block.extend(struct.pack("{}I".format(e), len(img_dat)))
             sec_9_block.extend(img_dat)
@@ -349,7 +360,8 @@ def rebuild_mdl (mdl_file):
                     else:
                         print("Skipping mesh rebuild for sub-model {}... (unsupported mesh types)".format(model))
                     # Build new texture section
-                    tex_names = [os.path.basename(x)[:-4] for x in glob.glob(model_base_name + '/*.dds')]
+                    tex_names = [os.path.basename(x) for x
+                        in glob.glob(model_base_name + '/*.dds') + glob.glob(model_base_name + '/*.bntx')]
                     sec8, sec9 = create_section_89 (model_base_name, tex_names)
                     base_model_data_blocks[8]['data'] = sec8
                     base_model_data_blocks[9]['data'] = sec9
